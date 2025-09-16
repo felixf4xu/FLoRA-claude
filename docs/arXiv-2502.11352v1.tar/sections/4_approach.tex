@@ -1,0 +1,206 @@
+\section{Approach}
+\label{sec:approach}
+
+This section presents our approach to learning interpretable driving rules from demonstrations. We begin by introducing the concept of condition-action pairs in Sec.~\ref{sec:condition-action-pair}, which forms the foundation of our rule representation. Sec.~\ref{sec:learnable_logic_structure} introduces the core of our method: the learnable logic structure. Here, we explain its components, analyze its capabilities, and describe how we extract and simplify rules from it. Finally, Sec.~\ref{sec:learning_from_single_class_demonstration} introduces our novel regularization techniques to overcome the limitations of learning from positive-only examples.
+
+\subsection{Condition-Action Pair}
+\label{sec:condition-action-pair}
+We consider rules that consist of conditions and expected actions. For instance, one such rule might require that the ego car eventually stop when approaching a stop sign. This pattern of condition-action pairing extends to countless driving situations. Thus, we focus on effectively learning and reducing driving rules to condition-action pairs.
+
+Predicates are the basic unit of our rules. We categorize our predicates into two types: condition predicates $\bar{\PredicateSet} = \{\bar{\PredicateWithIndex{1}}, \bar{\PredicateWithIndex{2}}, \ldots, \bar{\PredicateWithIndex{n}}\}$ and action predicates $\dot{\PredicateSet} = \{\dot{\PredicateWithIndex{1}}, \dot{\PredicateWithIndex{2}}, \ldots, \dot{\PredicateWithIndex{m}}\}$. Condition predicates evaluate traffic conditions (e.g., if approaching a stop sign), while action predicates assess the motion plan (e.g. if the ego car is stopped). Given
+\begin{equation}
+    \begin{aligned}
+        \mathit{condition} & := \bar{\Predicate} \mid \G\ condition \mid \F\ \mathit{condition} \mid \lnot \mathit{condition} \\
+        \mathit{action}    & := \dot{\Predicate} \mid \G\ \mathit{action} \mid \F\ \mathit{action} \mid \lnot \mathit{action}
+    \end{aligned}
+\end{equation}
+we extract and simplify the learned logic formula $\mathcal{L}$ to a set of propositional rules of the form:
+\begin{equation}
+    \bigodot_{i=1}^m \left(\bigwedge_{j=1}^n condition_j \rightarrow action_i\right)
+    \label{eq:condition_action_pair}
+\end{equation}
+where $\bigodot$ denotes that this condition-action pairs are connected by $\land$ or $\lor$ operators. The conjunction of conditions ($\bigwedge_{j=1}^n condition_j$) allows for more precise and specific criteria to be defined for each action, thereby describing precisely when the action should be allowed. Building upon this foundation, we introduce a learnable logic structure to represent and learn these condition-action pairs.
+
+
+\subsection{Learnable Logic Structure}
+\label{sec:learnable_logic_structure}
+
+The learnable logic structure $\bar{\mathcal{L}}$ is a directed acyclic computation graph that represents a compositional logic formula. It consists of three types of layers: \textbf{Temporal, Propositional}, and \textbf{Aggregation}. These layers are interconnected through learnable gates that determine the flow and combination of logical operations. An example of this structure is shown in Fig.~\ref{fig:learnable_logic_structure}.
+
+\begin{figure}[!htp]
+    \centering
+    % \vspace{-.5cm}
+    \includegraphics[width=\linewidth]{imgs/temporal_logic_net.drawio.png}
+    % \vspace{-.8cm}
+    \caption{
+        The logic structure $\bar{\mathcal{L}}$ consists of three types of layers: \textbf{Temporal, Propositional}, and \textbf{Aggregation}. The \textbf{Temporal} layer processes the initial predicates, applying temporal operators. The \textbf{Propositional} layer generates all possible pairs of predicates connected by logical operators. The \textbf{Aggregation} layer aggregates the output of the \textbf{Propositional} layer into one cluster by deciding the logic operator to connect neighboring clusters. \textbf{Temporal} layers can be stacked. a layer's formal definition is in Sec.~\ref{sec:layer_definition}.
+        Two types of gates, the \selectiongate, and the \negationgate, are used to control the logic operators and the sign of the cluster inputs, respectively. Each clear circle ($\bigcirc$) in these gates represents a single value \emph{weight}. In the selection gate, the
+        \protect\circled{graycirc} circle represents the operator with the largest weight, meaning the operator is selected. In the negation gate, the \protect\circled{bluecirc} circle represents the negation of the input (i.e., multiply with a negative number), while the \protect\circled{redcirc} circle represents the original input (i.e., a positive number). The gate implementation is described in Sec.~\ref{sec:gate_implementation}. Supposing we only consider one layer of Temporal layer ($n = 1$), and given a set of predicates $\PredicateSet = \{\PredicateWithIndex{1}, \PredicateWithIndex{2}, \PredicateWithIndex{3}\}$, $\PredicateWithIndex{2} \in \bar{\PredicateSet}$ and $\PredicateWithIndex{1}, \PredicateWithIndex{3} \in \dot{\PredicateSet}$, this learnable logic structure represents the logic formula $(\G \PredicateWithIndex{1} \lor \lnot \PredicateWithIndex{2}) \lor (\lnot \G \PredicateWithIndex{1} \land \F \PredicateWithIndex{3}) \lor (\lnot \PredicateWithIndex{2} \land \F \PredicateWithIndex{3})$
+        This formula can be further reduced to $\PredicateWithIndex{2} \rightarrow (\G \PredicateWithIndex{1} \lor \F \PredicateWithIndex{3})$.
+    }
+    % \vspace{-.7cm}
+    \label{fig:learnable_logic_structure}
+\end{figure}
+
+\subsubsection{Layer Definition}
+\label{sec:layer_definition}
+In the bottom block of Fig.~\ref{fig:learnable_logic_structure}, the frame batch is processed through $\PredicateSet$ and then passed through \textbf{Temporal} layers. Let $F = \{f_1, f_2, ..., f_T\}$ be a sequence of $T$ frames, where each frame represents a time point. Define $\PredicateSet = \{\PredicateWithIndex{1}, \PredicateWithIndex{2}, ..., \PredicateWithIndex{N}\}$ as a set of $N$ predicates. For each predicate $\PredicateWithIndex{i} \in \PredicateSet$ and each frame $f_t \in F$, we compute $X_i^t = \PredicateWithIndex{i}(f_t)$. Let $X_i^T = [x_i^1, x_i^2, ..., x_i^T]$ be the sequence of predicate values for predicate $\PredicateWithIndex{i}$ across all time steps. The output of the predicates is then defined as $\mathcal{X}^T = \{X_1^T, X_2^T, ..., X_N^T\}$, where each $X_i^T \in \mathbb{R}^T$ contains the predicate values computed over the entire time sequence for the $i$-th predicate. These frame sequences can be batched as shown in Fig.~\ref{fig:learnable_logic_structure}, to simplify the symbols, we only discuss the case with batch size one in the following parts.
+
+The \textbf{Temporal} layer $\mathcal{T}$ operates on each element $X_i^T \in \mathcal{X}^T$, potentially applying a temporal operator. Formally, the output of $\mathcal{T}$ is $ O^T  = \mathcal{T}(\mathcal{X}^T) = \{o^T_1, o^T_2, \ldots, o^T_N\}$, where $o^T_i = \mathcal{T}(x_i^T) \in \{\mathbf{G} X_i^T, \mathbf{F} X_i^T, X_i^T\}$. Temporal layers can be stacked, allowing for the composition of temporal operators. For instance, with two stacked temporal layers, we could have $\mathcal{T}_2(\mathcal{T}_1(X_i^T)) = \mathbf{F}(\mathbf{G}(X_i^T))$. This composition allows for expressing more nuanced and complex temporal properties.
+
+The \textbf{Propositional} logic layer $\mathcal{F}$ operates on its input set $O^T$, generating ${N \choose 2}$ clusters, each containing a combination of two inputs connected by a logical operator. The behavior of $\mathcal{F}$ is formalized as $\mathcal{F}(O^T) = O^P = \{o_1^P, o_2^P, \ldots, o_{N \choose 2}^P\}$, where $o_i^P = (\lnot) o_j^T \circ (\lnot) o_k^T$, $\circ \in \{\land, \lor\}$, and $O^T = \{o^T_1, o^T_2, \ldots, o^T_N\}$ is the output of a \textbf{Temporal} layer. Here, $j$ and $k$ represent the indices of the two different inputs being combined. Each input can be negated or unchanged when passing through a logic layer. We do not stack the \textbf{Propositional} layer as it would lead to exponential growth in the number of clusters; aggregating on one \textbf{Propositional} layer can represent any formula in the form of \eqref{eq:condition_action_pair} as we show in \ref{sec:logic_space_analysis}.
+
+The \textbf{Aggregation} layer aggregates the output of the \textbf{Propositional} ($O^P$) layer into one cluster using logical connectives $\{\land, \lor\}$ to connect neighboring clusters. Formally, given the input $O^P$, the output of the \textbf{Aggregation} layer can be represented as $\mathcal{A}(O^P) = o^P_1 \circ_1 o^P_2 \circ_2 \ldots \circ_{{N \choose 2} - 1} o^P_{N \choose 2}$, where $\circ$ represents $\land$ or $\lor$.
+
+A logic structure can be formally defined as
+$
+    \bar{\mathcal{L}}  = \mathcal{A}(\mathcal{F}(\mathcal{T}^{\times n}(\PredicateSet))),
+$
+where $n$ is the number of stacked Temporal layers.
+
+\subsubsection{Gate Implementation}
+\label{sec:gate_implementation}
+The layers in Fig.~\ref{fig:learnable_logic_structure} are composed of selection gates and negation gates. Each $\bigcirc$ in these gates represents a weight $w \in \mathbb{R}$.
+
+The \selectiongate~ acts as a soft attention mechanism to select between different operators across all layers (i.e., $\G, \F$ and identity operator in the Temporal layer, $\land, \lor$ in the \textbf{Propositional} and \textbf{Aggregation} layers), defined as:
+\begin{equation}
+    g_s(O) = \sigma([w_s^1 ; \cdots ; w_s^k]) \cdot [o_1 ; \cdots ; o_k]^T
+\end{equation}
+where $\sigma(\cdot)$ denotes the softmax function. For temporal operators in the \textbf{Temporal} layer, $O = [\rho(\G X_i^T), \rho(\F X_i^T), \rho(X_i^T)]^\top \in \mathbb{R}^3$ and $k=3$.
+For logic operators in the \textbf{Propositional} and \textbf{Aggregation} layers, $O = [\rho(o_1 \land o_2), \rho(o_1 \lor o_2)]^\top \in \mathbb{R}^2$ and $k=2$. The evaluation function $\rho$ is defined in  \eqref{eq:temporal_operators} and \eqref{eq:fol_operators}. The selection gate blends operators using softmax to enable continuous gradient flow during training.
+
+The \negationgate, given by $g_n = \tanh(w_{neg}) \cdot x$, with learnable parameters $w_{neg}$, controls the sign of cluster $x$ inputs to the Propositional layer.
+\begin{equation}
+    g_n = \tanh(w_{neg}) \cdot x, \quad w_{neg} \in \mathbb{R}, x \in \mathbb{R}
+\end{equation}
+The $\tanh$ function constrains the output to $[-1, 1]$. According to the quantitative semantics defined in \eqref{eq:fol_operators}, multiplying by a negative value negates the input. The gradient properties of $\tanh$ encourage $w_{neg}$ to converge towards either $-1$ or $1$ during training, effectively learning whether to negate the input.
+
+\subsubsection{Logic Space Analysis}
+\label{sec:logic_space_analysis}
+Stacking \textbf{Temporal} layers monotonically increases the logic space. Creating a logic space that contains up to $n$ nested temporal operators can be easily achieved by stacking $n$ \textbf{Temporal} layers. For the \textbf{Propositional} layer, we assert that:
+
+\begin{theorem}
+    Aggregating the output from a single \textbf{Propositional} layer can represent any formula in the form of \eqref{eq:condition_action_pair}.
+\end{theorem}
+
+\begin{proof}
+    Consider a \textbf{Propositional} layer with inputs ${\mathit{condition_1, \ldots, condition_n, action_1, \ldots, action_m}}$. For each $\mathit{action_i}$, combine:
+    $$(\lnot \mathit{condition_1 \lor action_i) \land \ldots \land (\lnot condition_n \lor action_i})$$
+    This is equivalent to $(\mathit{condition_1 \land \ldots \land condition_n) \rightarrow action_i}$. Aggregating for all $\mathit{action_i}$ yields:
+    $$\bigodot_{i=1}^m \left((\mathit{condition_1 \land \ldots \land condition_n) \rightarrow action_i}\right)$$
+    where $\bigodot$ is either $\land$ or $\lor$, matching the theorem's form.
+\end{proof}
+
+This theorem proves that a single \textbf{Propositional} layer is sufficient to express all condition-action pairs, justifying our computationally efficient design choice.
+
+
+\subsubsection{Ensembling}
+\label{sec:ensembling}
+
+Given a set of logic structures $\{\bar{\mathcal{L}}_1, \bar{\mathcal{L}}_2, \ldots, \bar{\mathcal{L}}_k\}$, we can ensemble them by aggregating their outputs with an additional \textbf{Aggregation} layer. Formally,
+\begin{equation}
+    \begin{aligned}
+        \bar{\mathcal{L}}_{\text{ensemble}} & = \mathcal{A}(\bar{\mathcal{L}}_1, \bar{\mathcal{L}}_2, \ldots, \bar{\mathcal{L}}_k)
+    \end{aligned}
+\end{equation}
+In practice, we noticed that ensembling multiple logic structures can improve the robustness of the learned rules.
+
+
+\subsubsection{Rule Extraction and Simplification}
+\label{sec:rule_extraction_and_simplification}
+
+The rule extraction and simplification process transforms the learned logic structure into interpretable condition-action pairs. To interpret the learned logic structure $\bar{\mathcal{L}}$, we extract its logic formula $\mathcal{L}$ by traversing the structure and selecting the most probable operators by concretizing the selection gates and negation gates. Given a selection gate $g_s$, let $\mathcal{C}(\cdot)$ denote the concretizing function:
+\begin{equation}
+    \begin{aligned}
+        \mathcal{C}(g_s) & = \argmax_{op} w^{op}_s, \quad op \in \begin{cases}
+                                                                     \{\mathbf{G}, \mathbf{F}, \text{id}\}, \\
+                                                                     \{\land, \lor\},
+                                                                 \end{cases}
+    \end{aligned}
+    \label{eq:selection_gate_concretizing}
+\end{equation}
+where $w^{op}_s$ represents the weights associated with each operator in the selection gate.
+For the negation gate $g_n$, the concretizing is determined by the sign of the weight:
+\begin{equation}
+    \begin{aligned}
+        \mathcal{C}(g_n) & = \begin{cases}
+                                 \text{negation}, & \text{if } w_{neg} < 0 \\
+                                 \text{original}, & \text{otherwise}
+                             \end{cases}
+    \end{aligned}
+    \label{eq:negation_gate_concretizing}
+\end{equation}
+A concrete example is shown in Fig.~\ref{fig:learnable_logic_structure} by iteratively applying \eqref{eq:selection_gate_concretizing} and \eqref{eq:negation_gate_concretizing} to the selection and negation gates. For an ensemble logic structure, we only need to apply the same rule further for the additional Aggregation layer.
+
+The extracted formula is then simplified to a set of condition-action pairs in the form of \eqref{eq:condition_action_pair}.
+We apply the Quine-McCluskey algorithm~\cite{McCluskey1956MinimizationOB} to simplify the extracted formula.
+Such simplification removes redundant cluster (e.g., $\land (\PredicateWithIndex{1} \lor \lnot \PredicateWithIndex{1})$).
+The resulting formula is then converted to conjunctive normal form:
+$
+    \bigwedge_{i=1}^n \left( \bigvee_{j=1}^m \bar{P}_j \lor \bigvee_{k=1}^l \dot{P}_k \right),
+$
+where $\bar{P}_j$ and $\dot{P}_k$ represent condition and action predicates, respectively. By double negating the condition predicates and applying De Morgan's laws, this formula can be further simplified to condition-action pairs in the form of \eqref{eq:condition_action_pair}.
+
+
+\subsection{Learning From Demonstration}
+\label{sec:learning_from_single_class_demonstration}
+
+Most demonstration datasets consist solely of examples representing ideal driving behaviors. Our goal is to learn the logic structure $\bar{\mathcal{L}}^*$ \footnote{$\bar{\mathcal{L}}$ means the learnable logic structure, while $\mathcal{L}$ means a concrete logic formula defined by \eqref{eq:logic_formula_syntax}. } and predicate parameters $\boldsymbol{\theta}^*$ that grade demonstrations with the highest score and unseen behaviors with lower scores. Directly optimizing on \eqref{eq:objective} would simply make the score $\bar{\mathcal{L}}(S; \boldsymbol{\theta})$ to be 1 for all demonstrations.
+The optimizer could find ``shortcuts'' and result in learning trivial formulas like $\PredicateWithIndex{1} \lor \lnot \PredicateWithIndex{1}$, which are always true and do not provide meaningful rules.
+To address this issue, we introduce two regularization terms for $\boldsymbol{\theta}$ and $\bar{\mathcal{L}}$. The full learning algorithm is presented in Algorithm \ref{algo:train-with-regularization}.
+% \setlength{\textfloatsep}{0pt}
+\begin{algorithm}[ht]
+    \caption{Training with Regularization}
+    \label{algo:train-with-regularization}
+    \KwIn{Dataset $\mathcal{D}^+$, initial logic structure $\bar{\mathcal{L}}$, initial parameters $\boldsymbol{\theta}$, learning rates $\alpha$, $\beta$, max weight $w_{\max}$, batch size $B$, number of epochs $E$}
+    \KwOut{Optimized $\bar{\mathcal{L}}^*$ and $\boldsymbol{\theta}^*$}
+
+    \SetKwFunction{FUpdate}{Update}
+    \SetKwFunction{FRegularize}{Regularize}
+
+    \SetKwProg{Fn}{Function}{:}{}
+    \Fn{\FUpdate{$\bar{\mathcal{L}}, \boldsymbol{\theta}, \mathcal{J}, \gamma$}}{
+        Update $\boldsymbol{\theta}$ with $\nabla_{\boldsymbol{\theta}} \mathcal{J}$\;
+        Update $\bar{\mathcal{L}}$ (i.e., gate weights) with $\nabla_{\bar{\mathcal{L}}} \mathcal{J}$\;
+        \Return $\bar{\mathcal{L}}, \boldsymbol{\theta}$\;
+    }
+
+    \Fn{\FRegularize{$\bar{\mathcal{L}}, \boldsymbol{\theta}, \alpha, \beta, w_{\max}$}}{
+        $\boldsymbol{\theta} \leftarrow \boldsymbol{\theta} - \alpha \cdot \text{sign}(\frac{\partial \bar{\mathcal{L}}}{\partial \boldsymbol{\theta}})$\;
+        \ForEach{Aggregation layer in $\bar{\mathcal{L}}$}{
+            $w_{\land} \leftarrow \min(w_{\land} + \beta, w_{\max})$\;
+        }
+        \Return $\bar{\mathcal{L}}, \boldsymbol{\theta}$\;
+    }
+
+    \For{epoch $\leftarrow 1$ \KwTo $E$}{
+        \For{each batch $\{S_1, \ldots, S_B\} \sim \mathcal{D}^+$}{
+            $\mathcal{J} \leftarrow \frac{1}{B}\sum_{i=1}^B \bar{\mathcal{L}}(S_i; \boldsymbol{\theta})$\;
+            $\bar{\mathcal{L}}, \boldsymbol{\theta} \leftarrow$ \FUpdate{$\bar{\mathcal{L}}, \boldsymbol{\theta}, \mathcal{J}, \gamma$}\;
+            $\bar{\mathcal{L}}, \boldsymbol{\theta} \leftarrow$ \FRegularize{$\bar{\mathcal{L}}, \boldsymbol{\theta}, \alpha, \beta, w_{\max}$}\;
+        }
+    }
+    \Return $\bar{\mathcal{L}}^* \leftarrow \bar{\mathcal{L}}$, $\boldsymbol{\theta}^* \leftarrow \boldsymbol{\theta}$
+\end{algorithm}
+
+
+The learning system evaluates driving behaviors in a state space $S = \{(\mathcal{E}_t, \tau_t)\}_{t=0}^T$, where behaviors with $\bar{\mathcal{L}}(S; \boldsymbol{\theta}) > 0$ are considered acceptable. Without constraints, the system might learn shortcuts that accept almost any behavior. We prevent this through two types of regularization:
+
+\subsubsection{Preventing Shortcut Learning Through Regularization}
+
+The learning system evaluates driving behaviors in a state space $S = \{(\mathcal{E}_t, \tau_t)\}_{t=0}^T$, where behaviors with $\bar{\mathcal{L}}(S; \boldsymbol{\theta}) > 0$ are considered acceptable. Without constraints, the system might learn shortcuts that accept almost any behavior.
+Consider a simple example where we want to learn rules for safe lane changes. Without regularization, the system might learn the rule:
+$\text{InLane} \lor \text{SafeDistance}$
+that accepts behaviors in which the car is either in a lane OR maintains safe distance, which is clearly too permissive. We prevent such shortcuts through two types of regularization: First, we gradually tighten the parameters $\boldsymbol{\theta}$ of each rule using:
+$
+    \boldsymbol{\theta} = \boldsymbol{\theta} - \alpha \cdot \text{sign}\left(\frac{\partial \bar{\mathcal{L}}}{\partial \boldsymbol{\theta}}\right).
+$
+In our example, this might gradually increase the required safe distance threshold from 1 meter to a more reasonable 2 meters. Second, when combining rules, we encourage the use of AND ($\land$) over OR ($\lor$) operations using:
+$
+    w_{op}^{\land} = \min(w_{op}^{\land} + \beta, w_{\max})
+$
+This helps the system learn more appropriate rules like:
+$\text{InLane} \land \text{SafeDistance}$
+requiring both conditions to be met for a safe lane change.
+
+Importantly, these constraints only eliminate spurious shortcuts - any rule structure or parameter that genuinely captures important driving behavior will remain intact, as it will be consistently reinforced by the demonstration data despite the regularization pressure.

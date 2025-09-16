@@ -1,0 +1,63 @@
+\documentclass[letterpaper, 10 pt, journal, twoside]{IEEEtran}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{amsthm}
+\usepackage[most]{tcolorbox}
+\usepackage{xcolor}
+\usepackage{booktabs, multirow} 
+\usepackage{soul}
+\usepackage{xcolor,colortbl}
+\usepackage{changepage,threeparttable} 
+\usepackage{hyperref}
+\usepackage[noadjust]{cite}
+
+\usepackage{tikz}
+\usepackage[linesnumbered,ruled,vlined]{algorithm2e}
+
+\usepackage{txfonts}
+\usepackage{newtxtext,newtxmath}
+\usepackage{newtxtt}
+\usepackage{wrapfig}
+
+\usetikzlibrary{tikzmark}
+
+\input{macros.tex}
+
+\usepackage{balance}
+
+\title{\LARGE \bf
+FLoRA: A \underline{F}ramework for \underline{L}earning Sc\underline{o}ring \underline{R}ules in \underline{A}utonomous Driving Planning Systems}
+
+
+\author{
+    Zikang Xiong, Joe Eappen, and Suresh Jagannathan % <-this % stops a space 
+\thanks{ Authors are with the Computer Science Department, Purdue University. 
+{\tt\small \{xiong84,jeappen,suresh\}@cs.purdue.edu}}
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+    In autonomous driving systems, motion planning is commonly implemented as a two-stage process: first, a trajectory proposer generates multiple candidate trajectories, then a scoring mechanism selects the most suitable trajectory for execution. For this critical selection stage, rule-based scoring mechanisms are particularly appealing as they can explicitly encode driving preferences, safety constraints, and traffic regulations in a formalized, human-understandable format. However, manually crafting these scoring rules presents significant challenges: the rules often contain complex interdependencies, require careful parameter tuning, and may not fully capture the nuances present in real-world driving data.
+    This work introduces FLoRA, a novel framework that bridges this gap by learning interpretable scoring rules represented in temporal logic. Our method features a learnable logic structure that captures nuanced relationships across diverse driving scenarios, optimizing both rules and parameters directly from real-world driving demonstrations collected in NuPlan. Our approach effectively learns to evaluate driving behavior even though the training data only contains positive examples (successful driving demonstrations). Evaluations in closed-loop planning simulations demonstrate that our learned scoring rules outperform existing techniques, including expert designed rules and neural network scoring models, while maintaining interpretability.
+    This work introduces a data-driven approach to enhance the scoring mechanism in autonomous driving systems, designed as a plug-in module to seamlessly integrate with various trajectory proposers.  Our video and code are available on \href{https://xiong.zikang.me/FLoRA/}{xiong.zikang.me/FLoRA/}.
+\end{abstract}
+
+\input{sections/1_intro.tex}
+\input{sections/2_related_work.tex}
+\input{sections/3_prelimiary.tex}
+\input{sections/4_approach.tex}
+\input{sections/5_experiment.tex}
+\input{sections/6_conclusion.tex}
+
+\bibliographystyle{IEEEtran}
+\bibliography{ref}
+
+
+\end{document}
+
+

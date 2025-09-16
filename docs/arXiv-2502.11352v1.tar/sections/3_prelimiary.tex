@@ -1,0 +1,50 @@
+\section{Preliminaries}
+\label{sec:problem_formulation}
+
+In this section, we formulate the key technical components and our objectives.
+
+\paragraph{Predicate $\Predicate$}
+At a certain time point, given all environment information $\mathcal{E} = (M, I, A)$ and a motion plan $\tau$, the differentiable predicate $\Predicate$ is defined as: $\Predicate : (\mathcal{E} \times \tau) \rightarrow [-1, 1]$, which evaluates driving conditions and the ego car's motion plan \footnote{The ego car refers to the vehicle being controlled in a driving scenario.}. Here, $M$ represents the HD map API that provides the functionality to query a drivable area, lane information, routing information and occupancy grid; $I = \{i_1,...,i_K\}$ represents the set of traffic light states, where each $i_k \in \{\mathit{red, yellow, green}\}$; $A = \{a_1,...,a_N\}$ represents the set of other agents, where each $a_i = \{(x_t, y_t, v_t)\}_{t=0}^{T}$ contains the agent's trajectory for the next 4 seconds (i.e., $T = 80$, $20Hz \times 4 s$). The motion plan $\tau = \{(x_t, y_t, v_t)\}_{t=0}^{T}$  consisting of a sequence of positions $(x_t, y_t)$ and speeds $v_t$, where higher-order derivatives (e.g., acceleration, jerk) can be computed through numerical differentiation when needed.
+$\Predicate$ maps $\mathcal{E}$ and $\tau$ to a truth confidence value in $[-1,1]$, where $\theta$ are the predicate parameters. Each predicate $\Predicate$ is parameterized by $\theta$, which defines thresholds or constraints specific to that predicate (e.g., safe time-to-collision threshold, comfortable acceleration bounds). When designing the predicate, we ensure that the gradient $\nabla_{\theta} \Predicate$ exists and can be computed. The sign of $\Predicate$ indicates truth. $\Predicate < 0$ implies False; $\Predicate > 0$ implies True. The absolute value $|\Predicate|$ indicates the degree of confidence.
+Similar to most existing work \cite{bartocci2022survey}, we explicitly design the predicates and focus this paper on learning logical connections and parameters assuming a given set of predicates. With the predicate defined, we can now move on to discussing how these predicates are combined into logical formulas.
+
+\paragraph{Formula $\mathcal{L}$}
+Given a differentiable predicate set $\PredicateSet = \{\PredicateWithIndex{1}, \PredicateWithIndex{2}, \ldots, \PredicateWithIndex{n}\}$, we introduce a $\mathtt{LTL}_f$ logic space \cite{LTLf} (LTL over finite traces) that includes compositions of predicates from $\PredicateSet$ and logic operators. The logic formula  $\mathcal{L}$ can be generated from the following grammar:
+\begin{align}
+    \mathcal{L} := \Predicate \mid \G\ \mathcal{L} \mid \F\ \mathcal{L} \mid \lnot \mathcal{L} \mid \mathcal{L} \land \mathcal{L}' \mid \mathcal{L} \lor \mathcal{L}'
+    \label{eq:logic_formula_syntax}
+\end{align}
+where $\Predicate \in \mathcal{P}$ is a differentiable predicate, $\G$ and $\F$ are temporal operators representing ``globally'' and ``finally'' respectively, $\lnot$ is logical negation, $\land$ is logical and, and $\lor$ is logical or.  Like most existing work \cite{bartocci2022survey}, the strong ``Until'' ($\mathcal{L}\ \U\ \mathcal{L}'$) is not included because it can be represented using existing logic operators ($\F\ \mathcal{L}' \wedge \G(\mathcal{L} \lor \mathcal{L}')$). Having established the syntax for our logic formulas, we now need a way to evaluate them quantitatively.
+
+\paragraph{Quantitative Evaluation of Formula}
+Given a finite input sequence $S = \{(\mathcal{E}_t, \tau_t)\}_{t=0}^T$ sampled at different time points, up to a bounded time $T$, we can evaluate the logic formula $\mathcal{L}$ quantitatively using a set of min and max operators\cite{fainekos2009robustness, deshmukh2017robust}. This evaluation maps the sequence $S$ to a value in $[-1, 1]$, denoted as
+$
+    \mathcal{L}(S; \boldsymbol{\theta}) \rightarrow [-1, 1].
+$
+Here, $\boldsymbol{\theta}$ represents all the predicates' parameters.
+Specifically, we define the quantitative evaluation of an atomic predicate $\Predicate$ at time $t$ as $\Predicate(\mathcal{E}_t, \tau_t) \in [-1, 1]$. In \eqref{eq:temporal_operators}, the temporal logic operators $\G$ and $\F$ evaluate the formula $\mathcal{L}$ over the entire sequence from time $t$ onwards. $\G \mathcal{L}$ (globally) returns the minimum value of $\mathcal{L}$ over all future time points, which ensures the property holds throughout the sequence if $\G \mathcal{L}$ evaluates to a positive value. $\F \mathcal{L}$ (finally) returns the maximum value, indicating the property is satisfied at least once in the future. The evaluation function $\rho$ is defined as:
+\begin{equation}
+    \begin{aligned}
+        \rho(\G \mathcal{L}, t) & = \min_{t' \geq t} \rho(\mathcal{L}, t') \quad & \rho(\F \mathcal{L}, t) & = \max_{t' \geq t} \rho(\mathcal{L}, t')
+    \end{aligned}
+    \label{eq:temporal_operators}
+\end{equation}
+For single time point evaluation, the logical operators and ($\land$), or ($\lor$), and not ($\lnot$) are defined using min, max, and negation operations:
+\begin{equation}
+    \begin{aligned}
+         & \rho(\mathcal{L} \land \mathcal{L}', t) & = & \min\{\rho(\mathcal{L}, t), \rho(\mathcal{L}', t)\} \\
+         & \rho(\mathcal{L} \lor \mathcal{L}', t)  & = & \max\{\rho(\mathcal{L}, t), \rho(\mathcal{L}', t)\} \\
+         & \rho(\lnot \mathcal{L}, t)              & = & -\rho(\mathcal{L}, t)
+    \end{aligned}
+    \label{eq:fol_operators}
+\end{equation}
+All the operations defined by $\rho$ are differentiable, which enables the use of backpropagation in the learning process.  In practice, we use softmin and softmax to approximate min and max operators for a smooth gradient \cite{Leung2020BackpropagationTS}. With the evaluation framework in place, we can now define our overall objective for learning optimal driving rules. For simplicity, we define $\rho(\cdot):= \rho(\cdot, 0)$, meaning evaluate from the initial of input sequence.
+
+\paragraph{Objective}
+Our objective is twofold: (1) learn the optimal logic formula $\mathcal{L}^*$, and (2) optimize the parameters $\boldsymbol{\theta}$ of the predicates, which characterize the demonstration data accurately.
+Formally, we aim to solve the following problem:
+\begin{align}
+    \mathcal{L}^*, \boldsymbol{\theta}^* = \argmax_{\mathcal{L} \in \Omega_\PredicateSet, \boldsymbol{\theta}} \mathbb{E}_{S \sim \mathcal{D}^+} [\mathcal{L}(S; \boldsymbol{\theta})]
+    \label{eq:objective}
+\end{align}
+where $\mathcal{D}^+$ represents driving demonstrations, which consist \textit{solely} of correct demonstrations that represent ideal driving behaviors.
