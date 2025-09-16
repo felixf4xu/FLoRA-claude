@@ -12,8 +12,8 @@ Similar to most existing work \cite{bartocci2022survey}, we explicitly design th
 Given a differentiable predicate set $\PredicateSet = \{\PredicateWithIndex{1}, \PredicateWithIndex{2}, \ldots, \PredicateWithIndex{n}\}$, we introduce a $\mathtt{LTL}_f$ logic space \cite{LTLf} (LTL over finite traces) that includes compositions of predicates from $\PredicateSet$ and logic operators. The logic formula  $\mathcal{L}$ can be generated from the following grammar:
 \begin{align}
     \mathcal{L} := \Predicate \mid \G\ \mathcal{L} \mid \F\ \mathcal{L} \mid \lnot \mathcal{L} \mid \mathcal{L} \land \mathcal{L}' \mid \mathcal{L} \lor \mathcal{L}'
-    \label{eq:logic_formula_syntax}
 \end{align}
+\label{eq:logic_formula_syntax}
 where $\Predicate \in \mathcal{P}$ is a differentiable predicate, $\G$ and $\F$ are temporal operators representing ``globally'' and ``finally'' respectively, $\lnot$ is logical negation, $\land$ is logical and, and $\lor$ is logical or.  Like most existing work \cite{bartocci2022survey}, the strong ``Until'' ($\mathcal{L}\ \U\ \mathcal{L}'$) is not included because it can be represented using existing logic operators ($\F\ \mathcal{L}' \wedge \G(\mathcal{L} \lor \mathcal{L}')$). Having established the syntax for our logic formulas, we now need a way to evaluate them quantitatively.
 
 \paragraph{Quantitative Evaluation of Formula}
@@ -27,8 +27,8 @@ Specifically, we define the quantitative evaluation of an atomic predicate $\Pre
     \begin{aligned}
         \rho(\G \mathcal{L}, t) & = \min_{t' \geq t} \rho(\mathcal{L}, t') \quad & \rho(\F \mathcal{L}, t) & = \max_{t' \geq t} \rho(\mathcal{L}, t')
     \end{aligned}
-    \label{eq:temporal_operators}
 \end{equation}
+\label{eq:temporal_operators}
 For single time point evaluation, the logical operators and ($\land$), or ($\lor$), and not ($\lnot$) are defined using min, max, and negation operations:
 \begin{equation}
     \begin{aligned}
@@ -36,8 +36,8 @@ For single time point evaluation, the logical operators and ($\land$), or ($\lor
          & \rho(\mathcal{L} \lor \mathcal{L}', t)  & = & \max\{\rho(\mathcal{L}, t), \rho(\mathcal{L}', t)\} \\
          & \rho(\lnot \mathcal{L}, t)              & = & -\rho(\mathcal{L}, t)
     \end{aligned}
-    \label{eq:fol_operators}
 \end{equation}
+\label{eq:fol_operators}
 All the operations defined by $\rho$ are differentiable, which enables the use of backpropagation in the learning process.  In practice, we use softmin and softmax to approximate min and max operators for a smooth gradient \cite{Leung2020BackpropagationTS}. With the evaluation framework in place, we can now define our overall objective for learning optimal driving rules. For simplicity, we define $\rho(\cdot):= \rho(\cdot, 0)$, meaning evaluate from the initial of input sequence.
 
 \paragraph{Objective}
@@ -45,6 +45,6 @@ Our objective is twofold: (1) learn the optimal logic formula $\mathcal{L}^*$, a
 Formally, we aim to solve the following problem:
 \begin{align}
     \mathcal{L}^*, \boldsymbol{\theta}^* = \argmax_{\mathcal{L} \in \Omega_\PredicateSet, \boldsymbol{\theta}} \mathbb{E}_{S \sim \mathcal{D}^+} [\mathcal{L}(S; \boldsymbol{\theta})]
-    \label{eq:objective}
 \end{align}
+\label{eq:objective}
 where $\mathcal{D}^+$ represents driving demonstrations, which consist \textit{solely} of correct demonstrations that represent ideal driving behaviors.

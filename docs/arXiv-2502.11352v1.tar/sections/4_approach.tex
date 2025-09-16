@@ -16,8 +16,8 @@ Predicates are the basic unit of our rules. We categorize our predicates into tw
 \end{equation}
 we extract and simplify the learned logic formula $\mathcal{L}$ to a set of propositional rules of the form:
 \begin{equation}
-    \bigodot_{i=1}^m \left(\bigwedge_{j=1}^n condition_j \rightarrow action_i\right)
     \label{eq:condition_action_pair}
+    \bigodot_{i=1}^m \left(\bigwedge_{j=1}^n condition_j \rightarrow action_i\right)
 \end{equation}
 where $\bigodot$ denotes that this condition-action pairs are connected by $\land$ or $\lor$ operators. The conjunction of conditions ($\bigwedge_{j=1}^n condition_j$) allows for more precise and specific criteria to be defined for each action, thereby describing precisely when the action should be allowed. Building upon this foundation, we introduce a learnable logic structure to represent and learn these condition-action pairs.
 
@@ -117,8 +117,8 @@ The rule extraction and simplification process transforms the learned logic stru
                                                                      \{\land, \lor\},
                                                                  \end{cases}
     \end{aligned}
-    \label{eq:selection_gate_concretizing}
 \end{equation}
+\label{eq:selection_gate_concretizing}
 where $w^{op}_s$ represents the weights associated with each operator in the selection gate.
 For the negation gate $g_n$, the concretizing is determined by the sign of the weight:
 \begin{equation}
@@ -128,8 +128,9 @@ For the negation gate $g_n$, the concretizing is determined by the sign of the w
                                  \text{original}, & \text{otherwise}
                              \end{cases}
     \end{aligned}
-    \label{eq:negation_gate_concretizing}
 \end{equation}
+\label{eq:negation_gate_concretizing}
+
 A concrete example is shown in Fig.~\ref{fig:learnable_logic_structure} by iteratively applying \eqref{eq:selection_gate_concretizing} and \eqref{eq:negation_gate_concretizing} to the selection and negation gates. For an ensemble logic structure, we only need to apply the same rule further for the additional Aggregation layer.
 
 The extracted formula is then simplified to a set of condition-action pairs in the form of \eqref{eq:condition_action_pair}.

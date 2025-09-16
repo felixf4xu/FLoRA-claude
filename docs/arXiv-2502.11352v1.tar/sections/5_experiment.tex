@@ -33,8 +33,8 @@ Fig.~\ref{fig:motivation_example} shows three of the rules learned by the gradin
 $\mathit{Comfortable}_{\boldsymbol{\theta}}$ is a predicate measure if a motion plan is comfortable, which has parameters $\boldsymbol{\theta} = [\theta_{a_{f}}, \theta_{a_{b}}, \theta_{a_{l}}, \theta_{a_{r}}]$, representing thresholds for acceleration in forward, backward, left, and right directions. It can be defined as:
 \begin{align}
     \mathit{Comfortable}_{\boldsymbol{\theta}} := \tanh(\min_{\substack{i \in \{a_{f}, a_{b}, a_{l}, a_{r}\}}} \{\theta_i - i(\tau)\})
-    \label{eq:comfortable_predicate}
 \end{align}
+\label{eq:comfortable_predicate}
 where $i(\tau)$ represents the maximum acceleration in the plan $\tau$ for each respective direction.
 Only when all the accelerations are below their thresholds, is the predicate evaluated as positive. The $\tanh$ function is used to ensure the output is in $[-1, 1]$. All threshold parameters in \eqref{eq:comfortable_predicate} are differentiable and can be learned from the training demonstration data.
 The learned parameters $\boldsymbol{\theta}$ are shown in Table \ref{tab: parameter-optimization}.
@@ -124,13 +124,12 @@ We evaluate the learned rules on different proposal approaches, including PDM \c
 \subsubsection{Number of Proposal Candidates}
 \label{sec:number_of_proposal_candidates}
 
-\begin{wrapfigure}{r}{0.25\textwidth}
+\begin{figure}
     \vspace{-0.5cm}
     \centering
-    \includegraphics[width=\linewidth]{imgs/prop-num-abl.png}
+    \includegraphics{imgs/prop-num-abl.png}
     \caption{Proposal Number Ablation}
-    \label{fig:ablation_candidates}
-\end{wrapfigure}
+\end{figure}
 
 As shown in \ref{fig:ablation_candidates}, the performance of both CLS-NR and CLS-R improves significantly when increasing proposals from 3 to 15 (CLS-NR: $0.81 \rightarrow 0.92$, CLS-R: $0.79 \rightarrow 0.93$), but plateaus beyond 15 proposals, showing only minimal gains up to 30. Therefore, 15 proposals were used in the main experiments.
 
